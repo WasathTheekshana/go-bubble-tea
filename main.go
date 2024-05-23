@@ -1,9 +1,9 @@
 package main
 
 import (
+	"fmt"
 	"log"
 
-	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -25,8 +25,8 @@ type model struct {
 	questions   []Question
 	width       int
 	height      int
-	answerField textinput.Model
 	styles      *Styles
+	done 	  bool
 }
 
 type Question struct {
@@ -39,7 +39,7 @@ func NewQuestion(question string) Question {
 	return Question{question: question}
 }
 
-func newShorQuestion(question string) Question {
+func newShortQuestion(question string) Question {
 	q := NewQuestion(question)
 	field := NewShortAnswerField()
 	q.input = field
@@ -55,12 +55,8 @@ func newLongQuestion(question string) Question {
 
 func New(questions []Question) *model {
 	styles := DefaultStyles()
-	answerField := textinput.New()
-	answerField.Placeholder = "Type your answer here and press enter"
-	answerField.Focus()
 	return &model{
 		questions:   questions,
-		answerField: answerField,
 		styles:      styles,
 	}
 }
@@ -81,19 +77,29 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+c":
 			return m, tea.Quit
 		case "enter":
-			current.answer = m.answerField.Value()
-			m.answerField.SetValue("")
+			if m.index == len(m.questions)-1 {
+				m.done = true
+			}
+			current.answer = current.input.Value()
 			log.Printf("question: %s, answer: %s", current.question, current.answer)
 			m.Next()
-			return m, nil
+			return m, current.input.Blur
 		}
 	}
 
-	m.answerField, cmd = m.answerField.Update(msg)
+	current.input, cmd = current.input.Update(msg)
 	return m, cmd
 }
 
 func (m model) View() string {
+	current := m.questions[m.index]
+	if m.done {
+		var output string
+		for _, q := range m.questions {
+			output += fmt.Sprintf("%s: %s\n", q.question, q.answer)
+		}
+		return output
+	}
 	if m.width == 0 {
 		return "Waiting for size..."
 	}
@@ -107,7 +113,7 @@ func (m model) View() string {
 		lipgloss.JoinVertical(
 			lipgloss.Center,
 			m.questions[m.index].question,
-			m.styles.InputField.Render(m.answerField.View()),
+			m.styles.InputField.Render(current.input.View()),
 		),
 	)
 }
@@ -123,9 +129,9 @@ func (m *model) Next() {
 func main() {
 
 	questions := []Question{
-		NewQuestion("What is your name?"),
-		NewQuestion("How old are you?"),
-		NewQuestion("What is your favorite color?"),
+		newShortQuestion("What is your name?"),
+		newShortQuestion("How old are you?"),
+		newLongQuestion("What is your favorite color?"),
 	}
 
 	m := New(questions)
